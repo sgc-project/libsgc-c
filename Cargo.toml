@@ -15,9 +15,8 @@ name = "sgc"
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
-# Sibling repo in dev; switch to a git dep once both are pushed:
-# libsgc-rs = { git = "git@github.com:lulkien/libsgc-rs.git" }
-libsgc-rs = { path = "../libsgc-rs" }
+# The Rust client, from its own repo (public, no auth needed).
+libsgc-rs = { git = "https://github.com/lulkien/libsgc-rs.git" }
 libc = "0.2"
 
 # --- .deb packaging (cargo-deb) -----------------------------------------
