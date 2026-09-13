@@ -1,0 +1,30 @@
+# Linkage convention (same as the daemon repo): musl targets are fully static,
+# gnu targets are dynamically linked against the target's glibc.
+#
+# The cdylib carries SONAME libsgc.so.0 on the glibc targets, which is what makes
+# the two-package split work:
+#
+#   libsgc-dev   /usr/lib/libsgc.so     -> libsgc.so.0   (symlink, link-time)
+#   libsgc       /usr/lib/libsgc.so.0.1.0                 (the object, run-time)
+#                /usr/lib/libsgc.so.0                     (created by ldconfig
+#                                                         from the SONAME)
+#
+# A consumer linking -lsgc gets DT_NEEDED libsgc.so.0, which the runtime package
+# satisfies. Without a soname the linker would record the path it linked against
+# and the split would not hold.
+#
+# musl targets produce no cdylib at all (rustc drops the crate type), so there is
+# no soname and no runtime package there. Only the cdylib link consumes these
+# link args; the static archive ignores them.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,-soname,libsgc.so.0"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+rustflags = ["-C", "link-arg=-Wl,-soname,libsgc.so.0"]
+
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-unknown-linux-musl-gcc"

@@ -20,18 +20,91 @@ libsgc-rs = { git = "https://github.com/lulkien/libsgc-rs.git" }
 libc = "0.2"
 
 # --- .deb packaging (cargo-deb) -----------------------------------------
-# libsgc-dev: headers + the static archive; the runtime libsgc.so lives in
-# the simple-graphics-controller package (Depends below). Assets are
-# explicit so the cdylib is NOT auto-added here (path conflicts otherwise).
+# Two packages per glibc flavor:
+#   libsgc-dev   the C/C++ headers and the static archive a client links
+#   libsgc       the shared object a dynamically linked client loads
+#
+# musl has no runtime package: rustc drops the cdylib crate type for musl
+# targets, so there is no libsgc.so to ship - a musl consumer links the archive.
+#
+# Assets are explicit. Auto-detection would put the cdylib and the staticlib on
+# each other's paths, and each package must own exactly its own file.
+#
+# Every flavor's archive is built for one target, so a glibc consumer installs
+# the glibc packages and a musl consumer the musl ones; each pairs with the
+# daemon flavor of the same linkage. See the package-* recipes in the Justfile.
 [package.metadata.deb]
 maintainer = "lulkien <kien.luuhoang.arch@proton.me>"
 name = "libsgc-dev"
 section = "libdevel"
-depends = "$auto, simple-graphics-controller"
+# Explicit, not $auto: the package ships no binary for dpkg-shlibdeps to read.
+depends = "libsgc, simple-graphics-controller"
+# The flavors are alternatives and the conflict is declared on both sides: with
+# it only on the musl package, installing it removes the glibc one, but
+# installing the glibc package over musl fails with a file conflict on
+# /usr/include and /usr/lib/libsgc.a.
+conflicts = "libsgc-dev-musl"
+replaces = "libsgc-dev-musl"
 assets = [
     ["include/libsgc.h", "usr/include/libsgc.h", "644"],
     ["include/sgc.hpp", "usr/include/sgc.hpp", "644"],
-    # Magic "target/release" prefix (see the server package) so the static
+    # Magic "target/release" prefix (see the daemon package) so the static
     # archive resolves per-arch under --target cross builds.
     ["target/release/libsgc.a", "usr/lib/libsgc.a", "644"],
+    # The link-time name for -lsgc: created by cargo-deb as a symlink inside the
+    # package (dest = the link, link_name = what it points at), because the
+    # target only exists in the runtime package.
+    { dest = "usr/lib/libsgc.so", link_name = "libsgc.so.0" },
 ]
+
+# --- the runtime package: the shared object, nothing else -----------------
+# The object carries SONAME libsgc.so.0 (.cargo/config.toml) and is installed
+# under that name, the way libssl3 ships libssl.so.3. The patch version is left
+# out of the filename on purpose: only the ABI number has to be in it, so a
+# version bump does not touch packaging. `ldconfig` runs from
+# debian/runtime/postinst to register the object in the linker cache.
+#
+# The split holds because of the soname: a consumer links -lsgc, which resolves
+# through the dev package's libsgc.so symlink, and the resulting binary records
+# DT_NEEDED libsgc.so.0 - satisfied by this package, not by the dev one.
+#
+# Cross-target flavors cannot run dpkg-shlibdeps against the target's libraries,
+# so each states its dependency explicitly. The two runtime variants share the
+# package name and differ by architecture, which keeps cargo-deb's
+# name_version_arch.deb filenames distinct.
+[package.metadata.deb.variants.runtime]
+name = "libsgc"
+section = "libs"
+# libc6 + libgcc-s1 are what the object's DT_NEEDED asks for. $auto would find
+# them for a binary, but not for a shared library shipped on its own.
+depends = "libc6, libgcc-s1, simple-graphics-controller"
+maintainer-scripts = "debian/runtime"
+assets = [
+    ["target/release/libsgc.so", "usr/lib/libsgc.so.0", "644"],
+]
+
+[package.metadata.deb.variants.runtime-aarch64]
+name = "libsgc"
+section = "libs"
+depends = "libc6, libgcc-s1, simple-graphics-controller"
+maintainer-scripts = "debian/runtime"
+assets = [
+    ["target/release/libsgc.so", "usr/lib/libsgc.so.0", "644"],
+]
+
+# The dev package for the board's glibc: same name as the native one, and it
+# needs the runtime package plus the daemon.
+[package.metadata.deb.variants.gnu-aarch64]
+depends = "libsgc, simple-graphics-controller"
+
+# musl: a different archive, so it cannot be installed alongside the glibc one.
+# It carries its own package name (cargo-deb derives the output filename from
+# name_version_arch whatever --variant says, so two flavors for one architecture
+# would be the same file) and declares itself an alternative to the glibc
+# package. One variant for both architectures: the aarch64 and x86_64 musl
+# recipes differ only by --target. No libsgc runtime: there is no musl .so.
+[package.metadata.deb.variants.musl]
+name = "libsgc-dev-musl"
+depends = "simple-graphics-controller-musl"
+conflicts = "libsgc-dev"
+replaces = "libsgc-dev"

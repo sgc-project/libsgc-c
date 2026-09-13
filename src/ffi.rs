@@ -367,14 +367,12 @@ mod tests {
     #[test]
     fn error_buffer_is_written_and_truncated() {
         let mut buf = [0i8; 8];
-        unsafe {
-            set_err(buf.as_mut_ptr(), buf.len(), "this message is long");
-        }
+        set_err(buf.as_mut_ptr(), buf.len(), "this message is long");
         let s = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) }
             .to_string_lossy()
             .into_owned();
         assert_eq!(s, "this me");
         // Empty buffer: no write, no crash.
-        unsafe { set_err(ptr::null_mut(), 0, "x") };
+        set_err(ptr::null_mut(), 0, "x");
     }
 }

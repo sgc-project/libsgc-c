@@ -1,0 +1,12 @@
+#!/bin/sh
+# Installed by the libsgc runtime package: refresh the linker cache so a client
+# finds the object that was just unpacked.
+#
+# The shipped file is already named after the soname (libsgc.so.0), so there is
+# no versioned symlink for ldconfig to generate here - the cache entry is what
+# matters. The libsgc.so link that -lsgc needs comes from the dev package.
+set -e
+
+if [ "$1" = configure ] && [ -x /sbin/ldconfig ]; then
+    /sbin/ldconfig
+fi

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Installed by the libsgc runtime package: drop the removed object from the
+# linker cache.
+set -e
+
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+    if [ -x /sbin/ldconfig ]; then
+        /sbin/ldconfig
+    fi
+fi
