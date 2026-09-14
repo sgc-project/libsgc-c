@@ -11,7 +11,7 @@ C ABI library `sgc` exporting `libsgc.a` (static) and `libsgc.so` (shared), with
   - fd in a `GRANTED` event and the fd from `sgc_fd` are owned by the caller (close them)
   - the array from `sgc_advertised` is `malloc`'d — free it with `sgc_free`
 - **C++ wrapper** — `include/sgc.hpp` wraps the C ABI; C++ consumers should use that, not the C API directly
-- **Round-trip mappings** — `sgc_resource` (kind + index) <-> `libsgc_rs::Resource`; `sgc_event` <-> `libsgc_rs::SgcEvent`
+- **Round-trip mappings** — `sgc_resource` (kind + index) <-> `libsgc_rs::Resource`; `sgc_event` <-> `libsgc_rs::SgcEvent`. Known gap: the library's `SgcEvent::Advertised` (the server pushing a changed resource list, e.g. a device plugged in while the client runs) has NO event kind in the C ABI — `sgc_pump` ignores it, so a C client sees the connect-time list only. The cheap fix is to refresh the handle's cached list when the event arrives, which keeps `sgc_advertised` truthful without a new event kind; either way it can only land once the `libsgc-rs` rev carrying the variant is pushed, because the mapping match here is exhaustive and would not compile against the older rev.
 
 ## Rust Best Practices (per rust-skills, applied to C FFI boundary)
 - [`unsafe-safety-comment`] — Write a `// SAFETY:` comment above every `unsafe` block and a `# Safety` section in every `unsafe fn`; every C function touching raw fds/pointers documents its safety invariant
