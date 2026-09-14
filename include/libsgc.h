@@ -60,7 +60,10 @@ sgc_client *sgc_connect(char *err, size_t err_len);
 
 /* Copy the controller's advertised resources into a freshly malloc'd array
  * (*out is NULL when there are none). The caller owns *out and must pass
- * it to sgc_free(). Returns 0 on success, -1 on error. */
+ * it to sgc_free(). Returns 0 on success, -1 on error.
+ *
+ * The list is the one from connect, refreshed whenever sgc_pump() reports a
+ * changed list, so it stays current for as long as the session lives. */
 int sgc_advertised(sgc_client *c, sgc_resource **out, size_t *count);
 
 /* Free a pointer returned by sgc_advertised(). */
@@ -78,7 +81,10 @@ int sgc_acquire(sgc_client *c, sgc_resource r, char *err, size_t err_len);
  * Returns:
  *   1  an event was stored in *out (GRANTED: close() the fd; REVOKED:
  *      stop drawing and close() any dup you hold)
- *   0  nothing happened (timeout) — call again
+ *   0  nothing the ABI can report: a timeout, or the daemon's resource
+ *      list changed (a device was plugged in or removed) — either way
+ *      sgc_advertised() now returns the current list, so call it if you
+ *      track devices and then pump again
  *  -1  connection error — the session is over; every resource you held
  *      was already reported as REVOKED (one event per sgc_pump call)
  */

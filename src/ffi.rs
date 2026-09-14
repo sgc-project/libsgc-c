@@ -245,7 +245,9 @@ pub extern "C" fn sgc_acquire(
 /// once, `> 0` waits that many milliseconds.
 ///
 /// Returns `1` = an event was stored in `*out` (a `GRANTED` fd is owned by
-/// the caller), `0` = nothing happened, `-1` = connection error.
+/// the caller), `0` = nothing the ABI can report (a timeout, or the daemon's
+/// resource list changed — [`sgc_advertised`] then returns the new one),
+/// `-1` = connection error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sgc_pump(
     c: *mut sgc_client,
@@ -283,6 +285,21 @@ pub extern "C" fn sgc_pump(
                     fd: fd.into_raw_fd(),
                 };
                 Ok(1)
+            }
+            // The daemon's list changed (a device was plugged in or removed).
+            // The C ABI has no event kind for that — `sgc_event` carries a
+            // resource, not a list — so this refreshes the handle's copy, which
+            // is what `sgc_advertised` returns, and reports "nothing happened":
+            // the caller keeps pumping, and its next `sgc_advertised` is
+            // truthful about what the daemon offers now.
+            Some(SgcEvent::Advertised {
+                available_resources,
+            }) => {
+                ctx.advertised = available_resources
+                    .iter()
+                    .map(sgc_resource::from_resource)
+                    .collect();
+                Ok(0)
             }
             None => Ok(0),
         }

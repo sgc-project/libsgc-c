@@ -7,6 +7,12 @@ version = "0.1.0"
 edition = "2024"
 license = "Unlicense"
 description = "C ABI for libsgc: libsgc.h/sgc.hpp headers plus the sgc shared and static libraries"
+repository = "https://github.com/lulkien/libsgc-c"
+readme = "README.md"
+keywords = ["drm", "kiosk", "display", "ffi", "c"]
+categories = ["api-bindings", "external-ffi-bindings", "os::unix-apis"]
+rust-version = "1.85"
+exclude = ["AGENT.md", "debian"]
 
 # The C library: libsgc.a (static) + libsgc.so (shared), exporting the
 # sgc_* ABI declared in include/libsgc.h.
@@ -16,7 +22,8 @@ crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 # The Rust client, from its own repo (public, no auth needed).
-libsgc-rs = { git = "https://github.com/lulkien/libsgc-rs.git" }
+# Path for local development, version for the published crate (see libsgc-rs).
+libsgc-rs = { version = "0.1", path = "../libsgc-rs" }
 libc = "0.2"
 
 # --- .deb packaging (cargo-deb) -----------------------------------------
