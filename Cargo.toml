@@ -3,7 +3,7 @@
 # against the static archive and headers.
 [package]
 name = "libsgc-c"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "Unlicense"
 description = "C ABI for libsgc: libsgc.h/sgc.hpp headers plus the sgc shared and static libraries"
@@ -23,7 +23,7 @@ crate-type = ["staticlib", "cdylib"]
 [dependencies]
 # The Rust client, from its own repo (public, no auth needed).
 # Path for local development, version for the published crate (see libsgc-rs).
-libsgc-rs = { version = "0.1", path = "../libsgc-rs" }
+libsgc-rs = { version = "0.2", path = "../libsgc-rs" }
 libc = "0.2"
 
 # --- .deb packaging (cargo-deb) -----------------------------------------

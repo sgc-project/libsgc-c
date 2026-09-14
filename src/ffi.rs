@@ -38,6 +38,9 @@ pub const SGC_RESOURCE_TOUCH: c_int = 4;
 /// Event kinds (`sgc_event.kind`).
 pub const SGC_EVENT_REVOKED: c_int = 0;
 pub const SGC_EVENT_GRANTED: c_int = 1;
+/// The daemon's resource list changed; [`sgc_advertised`] is current. Carries no
+/// resource: `kind` and `index` are `-1`, and there is no fd.
+pub const SGC_EVENT_ADVERTISED: c_int = 2;
 
 // --- Types ---------------------------------------------------------------
 
@@ -244,10 +247,10 @@ pub extern "C" fn sgc_acquire(
 /// in `*out`. `-1` blocks until an event or connection error, `0` polls
 /// once, `> 0` waits that many milliseconds.
 ///
-/// Returns `1` = an event was stored in `*out` (a `GRANTED` fd is owned by
-/// the caller), `0` = nothing the ABI can report (a timeout, or the daemon's
-/// resource list changed — [`sgc_advertised`] then returns the new one),
-/// `-1` = connection error.
+/// Returns `1` = an event was stored in `*out` (a `GRANTED` fd is owned by the
+/// caller), `0` = nothing happened within the timeout, `-1` = connection error.
+/// A changed resource list arrives as [`SGC_EVENT_ADVERTISED`], which carries no
+/// resource — [`sgc_advertised`] returns the new list.
 #[unsafe(no_mangle)]
 pub extern "C" fn sgc_pump(
     c: *mut sgc_client,
@@ -287,11 +290,8 @@ pub extern "C" fn sgc_pump(
                 Ok(1)
             }
             // The daemon's list changed (a device was plugged in or removed).
-            // The C ABI has no event kind for that — `sgc_event` carries a
-            // resource, not a list — so this refreshes the handle's copy, which
-            // is what `sgc_advertised` returns, and reports "nothing happened":
-            // the caller keeps pumping, and its next `sgc_advertised` is
-            // truthful about what the daemon offers now.
+            // Refresh the handle's copy — what `sgc_advertised` returns — and
+            // report it, so a caller that tracks devices can take what is new.
             Some(SgcEvent::Advertised {
                 available_resources,
             }) => {
@@ -299,7 +299,15 @@ pub extern "C" fn sgc_pump(
                     .iter()
                     .map(sgc_resource::from_resource)
                     .collect();
-                Ok(0)
+                *out = sgc_event {
+                    kind: SGC_EVENT_ADVERTISED,
+                    resource: sgc_resource {
+                        kind: -1,
+                        index: -1,
+                    },
+                    fd: -1,
+                };
+                Ok(1)
             }
             None => Ok(0),
         }

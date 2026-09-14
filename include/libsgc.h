@@ -38,6 +38,10 @@ extern "C" {
 /* Event kinds (sgc_event.kind). */
 #define SGC_EVENT_REVOKED 0
 #define SGC_EVENT_GRANTED 1
+/* The daemon's resource list changed: a device was plugged in or removed. The
+ * event carries no resource (kind/index are -1, fd is -1); read the current
+ * list with sgc_advertised() and take what is new to you. */
+#define SGC_EVENT_ADVERTISED 2
 
 typedef struct sgc_client sgc_client; /* opaque */
 
@@ -48,7 +52,7 @@ typedef struct {
 } sgc_resource;
 
 typedef struct {
-    int kind;         /* SGC_EVENT_* */
+    int kind;         /* SGC_EVENT_*; ADVERTISED carries no resource */
     sgc_resource resource;
     int fd;           /* GRANTED only: owned by the caller, close() it;
                          -1 otherwise */
@@ -62,16 +66,19 @@ sgc_client *sgc_connect(char *err, size_t err_len);
  * (*out is NULL when there are none). The caller owns *out and must pass
  * it to sgc_free(). Returns 0 on success, -1 on error.
  *
- * The list is the one from connect, refreshed whenever sgc_pump() reports a
- * changed list, so it stays current for as long as the session lives. */
+ * The list is the one from connect, refreshed whenever sgc_pump() reports
+ * SGC_EVENT_ADVERTISED, so it stays current for as long as the session
+ * lives. */
 int sgc_advertised(sgc_client *c, sgc_resource **out, size_t *count);
 
 /* Free a pointer returned by sgc_advertised(). */
 void sgc_free(void *p);
 
-/* Request `resource` and BLOCK until the server answers (grant or deny).
+/* Request `resource` and wait for the server's answer for that request.
  * On grant the client holds the fd internally; borrow it with sgc_fd().
- * Returns 0 on success, -1 on error (denied, not registered, ...). */
+ * Returns 0 on success, -1 on error: denied, not registered, or QUEUED -
+ * the device is held elsewhere and the server will send the grant later, as
+ * an ordinary GRANTED event from sgc_pump(). */
 int sgc_acquire(sgc_client *c, sgc_resource r, char *err, size_t err_len);
 
 /* Drive the protocol: wait up to timeout_ms for one event and store it in
@@ -79,12 +86,11 @@ int sgc_acquire(sgc_client *c, sgc_resource r, char *err, size_t err_len);
  * 0 = poll once; > 0 = wait that many milliseconds.
  *
  * Returns:
- *   1  an event was stored in *out (GRANTED: close() the fd; REVOKED:
- *      stop drawing and close() any dup you hold)
- *   0  nothing the ABI can report: a timeout, or the daemon's resource
- *      list changed (a device was plugged in or removed) — either way
- *      sgc_advertised() now returns the current list, so call it if you
- *      track devices and then pump again
+ *   1  an event was stored in *out: SGC_EVENT_GRANTED (close() the fd),
+ *      SGC_EVENT_REVOKED (stop drawing and close() any dup you hold), or
+ *      SGC_EVENT_ADVERTISED (a device was plugged in or removed — read
+ *      sgc_advertised() and take what is new to you)
+ *   0  nothing happened within timeout_ms
  *  -1  connection error — the session is over; every resource you held
  *      was already reported as REVOKED (one event per sgc_pump call)
  */

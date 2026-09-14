@@ -39,8 +39,15 @@ while ((ret = sgc_pump(c, -1, &ev, err, sizeof(err))) == 1) {
     if (ev.kind == SGC_EVENT_GRANTED) {
         /* ev.fd is yours: use it, close() the dups you took with sgc_fd() */
     }
+    else if (ev.kind == SGC_EVENT_REVOKED) {
+        /* stop drawing on the resource, close your dup */
+    }
     else {
-        /* SGC_EVENT_REVOKED: stop drawing on the resource, close your dup */
+        /* SGC_EVENT_ADVERTISED: a device was plugged in or removed. Read the
+           current list and take the entries that are new to you. */
+        sgc_resource *now = NULL;
+        size_t n = 0;
+        if (sgc_advertised(c, &now, &n) == 0) { /* acquire the new ones */ sgc_free(now); }
     }
 }
 /* ret == -1: the session is over (every held resource was reported REVOKED
@@ -53,7 +60,10 @@ sgc_release(c);
 The header documents every function and its ownership rules; the short version is
 that **each granted fd is the caller's to `close()`**, and the array from
 `sgc_advertised` is freed with `sgc_free`. `sgc_pump` is the whole event loop:
-`-1` blocks, `0` polls once, `> 0` waits that many milliseconds.
+`-1` blocks, `0` polls once, `> 0` waits that many milliseconds. A changed
+resource list arrives as `SGC_EVENT_ADVERTISED`, which carries no resource
+(`kind`/`index` are `-1`, `fd` is `-1`) — the list itself comes from
+`sgc_advertised`.
 
 `tests/smoke/` compiles and exercises the entire surface from both C and C++
 (`main.c`, `main.cc`), including the error channel and NULL-handle robustness.
